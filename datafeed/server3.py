@@ -18,7 +18,7 @@
 #  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 #  DEALINGS IN THE SOFTWARE.
 
-# from itertools import izip
+from itertools import zip_longest as izip  # or simply use zip if you're not using izip
 from random import normalvariate, random
 from datetime import timedelta, datetime
 
@@ -31,7 +31,6 @@ import json
 import re
 import threading
 
-# from BaseHTTPServer import BaseHTTPRequestHandler,HTTPServer
 import http.server
 from socketserver import ThreadingMixIn
 
@@ -43,7 +42,7 @@ from socketserver import ThreadingMixIn
 
 REALTIME = True
 SIM_LENGTH = timedelta(days=365 * 5)
-MARKET_OPEN = datetime.today().replace(hour=0, minute=30, second=0)
+MARKET_OPEN = datetime.today().replace(hour=0, minute=30, second=0, microsecond=0)
 
 # Market parms
 #       min  / max  / std
@@ -150,7 +149,7 @@ def order_book(orders, book, stock_name):
 
 def generate_csv():
     """ Generate a CSV of order history. """
-    with open('test.csv', 'wb') as f:
+    with open('test.csv', 'w', newline='') as f:
         writer = csv.writer(f)
         for t, stock, side, order, size in orders(market()):
             if t > MARKET_OPEN + SIM_LENGTH:
@@ -160,7 +159,7 @@ def generate_csv():
 
 def read_csv():
     """ Read a CSV or order history into a list. """
-    with open('test.csv', 'rt') as f:
+    with open('test.csv', 'r') as f:
         for time, stock, side, order, size in csv.reader(f):
             yield dateutil.parser.parse(time), stock, side, float(order), int(size)
 
@@ -235,12 +234,12 @@ def run(routes, host='0.0.0.0', port=8080):
     thread.daemon = True
     thread.start()
     print('HTTP server started on port 8080')
-    while True:
-        from time import sleep
-        sleep(1)
-    server.shutdown()
-    server.start()
-    server.waitForThread()
+    try:
+        while True:
+            from time import sleep
+            sleep(1)
+    except KeyboardInterrupt:
+        server.shutdown()
 
 
 ################################################################################
@@ -262,7 +261,10 @@ class App(object):
         self._data_1 = order_book(read_csv(), self._book_1, 'ABC')
         self._data_2 = order_book(read_csv(), self._book_2, 'DEF')
         self._rt_start = datetime.now()
-        self._sim_start, _, _ = next(self._data_1)
+        try:
+            self._sim_start, _, _ = next(self._data_1)
+        except StopIteration:
+            raise RuntimeError("No data available in CSV.")
         self.read_10_first_lines()
 
     @property
@@ -340,3 +342,5 @@ if __name__ == '__main__':
         print("No data found, generating...")
         generate_csv()
     run(App())
+
+
